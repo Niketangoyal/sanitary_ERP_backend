@@ -1,0 +1,26 @@
+import { Router } from "express";
+import { authRoutes } from "./auth.routes";
+import { customerRoutes } from "./customer.routes";
+import { productRoutes } from "./product.routes";
+import { saleRoutes } from "./sale.routes";
+import { returnRoutes } from "./return.routes";
+import { paymentRoutes } from "./payment.routes";
+import { ledgerRoutes } from "./ledger.routes";
+import { reportRoutes } from "./report.routes";
+import { dashboardRoutes } from "./dashboard.routes";
+import { settingsRoutes } from "./settings.routes";
+import { searchRoutes } from "./search.routes";
+
+export const router = Router();
+
+router.use("/auth", authRoutes);
+router.use("/customers", customerRoutes);
+router.use("/products", productRoutes);
+router.use("/sales", saleRoutes);
+router.use("/returns", returnRoutes);
+router.use("/payments", paymentRoutes);
+router.use("/ledger", ledgerRoutes);
+router.use("/reports", reportRoutes);
+router.use("/dashboard", dashboardRoutes);
+router.use("/settings", settingsRoutes);
+router.use("/search", searchRoutes);
