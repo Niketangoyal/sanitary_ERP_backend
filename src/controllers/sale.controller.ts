@@ -4,6 +4,7 @@ import { saleService } from "../services/sale.service";
 import { settingsService } from "../services/settings.service";
 import { generatePdfBuffer } from "../utils/pdf/printer";
 import { buildInvoicePdfDefinition } from "../services/pdf/invoicePdf";
+import { AppError } from "../utils/AppError";
 
 export const saleController = {
   list: asyncHandler(async (req: Request, res: Response) => {
@@ -24,6 +25,17 @@ export const saleController = {
   create: asyncHandler(async (req: Request, res: Response) => {
     const data = await saleService.create(req.body, req.user?.userId);
     res.status(201).json({ success: true, data });
+  }),
+
+  update: asyncHandler(async (req: Request, res: Response) => {
+    const data = await saleService.update(req.params.id, req.body, req.user?.userId);
+    res.json({ success: true, data });
+  }),
+
+  remove: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw AppError.unauthorized();
+    await saleService.remove(req.params.id, req.user.userId, req.body?.reason);
+    res.json({ success: true, message: "Invoice deleted" });
   }),
 
   downloadPdf: asyncHandler(async (req: Request, res: Response) => {

@@ -2,10 +2,23 @@ import type { Content, TDocumentDefinitions } from "pdfmake/interfaces";
 import type { Settings } from "@prisma/client";
 import { buildLetterhead, buildFooter, pdfStyles } from "../../utils/pdf/common";
 import { formatMoneyPdf, formatDatePdf } from "../../utils/pdf/format";
+import { PAYMENT_MODE_LABELS } from "../../utils/labels";
+
+const SALE_TYPE_LABEL: Record<string, string> = { CASH: "Cash (Kacha)", BILL: "Bill (Pakka)" };
+const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  PAID: "Paid",
+  UNPAID: "Unpaid",
+  PARTIAL: "Partially Paid",
+};
 
 interface SaleForPdf {
   invoiceNumber: string;
   invoiceDate: Date;
+  saleType: string;
+  paymentStatus: string;
+  paymentMethod: string | null;
+  amountPaid: unknown;
+  balanceDue: unknown;
   subtotal: unknown;
   discountTotal: unknown;
   gstTotal: unknown;
@@ -36,10 +49,10 @@ export const buildInvoicePdfDefinition = (
     { text: String(index + 1), style: "cell" },
     { text: item.itemName, style: "cell" },
     { text: String(item.quantity), style: "cell", alignment: "right" },
-    { text: formatMoneyPdf(item.rate as string), style: "cell", alignment: "right" },
+    { text: formatMoneyPdf(item.rate), style: "cell", alignment: "right" },
     { text: `${item.discountPercent}%`, style: "cell", alignment: "right" },
     { text: `${item.gstPercent}%`, style: "cell", alignment: "right" },
-    { text: formatMoneyPdf(item.total as string), style: "cell", alignment: "right" },
+    { text: formatMoneyPdf(item.total), style: "cell", alignment: "right" },
   ]);
 
   return {
@@ -68,11 +81,37 @@ export const buildInvoicePdfDefinition = (
             stack: [
               { text: [{ text: "Invoice No: ", bold: true }, sale.invoiceNumber] },
               { text: [{ text: "Date: ", bold: true }, formatDatePdf(sale.invoiceDate)] },
+              { text: [{ text: "Sale Type: ", bold: true }, SALE_TYPE_LABEL[sale.saleType] ?? sale.saleType] },
             ],
             alignment: "right",
           },
         ],
-        margin: [0, 0, 0, 16],
+        margin: [0, 0, 0, 12],
+      },
+      {
+        table: {
+          widths: ["*", "*", "*", "*"],
+          body: [
+            [
+              { text: "PAYMENT STATUS", style: "sectionLabel" },
+              { text: "PAYMENT METHOD", style: "sectionLabel" },
+              { text: "AMOUNT PAID", style: "sectionLabel" },
+              { text: "BALANCE DUE", style: "sectionLabel" },
+            ],
+            [
+              { text: PAYMENT_STATUS_LABEL[sale.paymentStatus] ?? sale.paymentStatus, bold: true },
+              { text: sale.paymentMethod ? PAYMENT_MODE_LABELS[sale.paymentMethod] : "-" },
+              { text: formatMoneyPdf(sale.amountPaid) },
+              {
+                text: formatMoneyPdf(sale.balanceDue),
+                bold: true,
+                color: Number(sale.balanceDue) > 0 ? "#C77700" : "#1E8E5A",
+              },
+            ],
+          ],
+        },
+        layout: "noBorders",
+        margin: [0, 0, 0, 14],
       },
       {
         table: {
@@ -108,10 +147,12 @@ export const buildInvoicePdfDefinition = (
             table: {
               widths: ["*", "auto"],
               body: [
-                [{ text: "Subtotal", style: "cell" }, { text: formatMoneyPdf(sale.subtotal as string), style: "cell", alignment: "right" }],
-                [{ text: "Discount", style: "cell" }, { text: `- ${formatMoneyPdf(sale.discountTotal as string)}`, style: "cell", alignment: "right" }],
-                [{ text: "GST", style: "cell" }, { text: `+ ${formatMoneyPdf(sale.gstTotal as string)}`, style: "cell", alignment: "right" }],
-                [{ text: "Grand Total", style: "totalLabel" }, { text: formatMoneyPdf(sale.grandTotal as string), style: "totalValue", alignment: "right" }],
+                [{ text: "Subtotal", style: "cell" }, { text: formatMoneyPdf(sale.subtotal), style: "cell", alignment: "right" }],
+                [{ text: "Discount", style: "cell" }, { text: `- ${formatMoneyPdf(sale.discountTotal)}`, style: "cell", alignment: "right" }],
+                [{ text: "GST", style: "cell" }, { text: `+ ${formatMoneyPdf(sale.gstTotal)}`, style: "cell", alignment: "right" }],
+                [{ text: "Grand Total", style: "totalLabel" }, { text: formatMoneyPdf(sale.grandTotal), style: "totalValue", alignment: "right" }],
+                [{ text: "Amount Paid", style: "cell" }, { text: formatMoneyPdf(sale.amountPaid), style: "cell", alignment: "right" }],
+                [{ text: "Balance Due", style: "totalLabel" }, { text: formatMoneyPdf(sale.balanceDue), style: "totalValue", alignment: "right" }],
               ],
             },
             layout: "noBorders",

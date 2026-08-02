@@ -5,6 +5,7 @@ import { validate } from "../middleware/validate";
 import {
   createCustomerSchema,
   updateCustomerSchema,
+  deleteCustomerSchema,
   idParamSchema,
 } from "../utils/validators/customer.schema";
 
@@ -21,4 +22,8 @@ customerRoutes.put(
   validate({ params: idParamSchema, body: updateCustomerSchema }),
   customerController.update,
 );
-customerRoutes.delete("/:id", validate({ params: idParamSchema }), customerController.remove);
+customerRoutes.delete(
+  "/:id",
+  validate({ params: idParamSchema, body: deleteCustomerSchema }),
+  customerController.remove,
+);

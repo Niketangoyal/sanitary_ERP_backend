@@ -14,6 +14,7 @@ const REPORT_KEYS: ReportKey[] = [
   "item-wise-sales",
   "monthly-sales",
   "date-wise-sales",
+  "profit",
 ];
 
 const REPORT_FILENAMES: Record<ReportKey, string> = {
@@ -24,12 +25,14 @@ const REPORT_FILENAMES: Record<ReportKey, string> = {
   "item-wise-sales": "Item-Wise-Sales-Report.pdf",
   "monthly-sales": "Monthly-Sales-Report.pdf",
   "date-wise-sales": "Date-Wise-Sales-Report.pdf",
+  profit: "Profit-Report.pdf",
 };
 
 const parseRange = (query: Record<string, string | undefined>) => ({
   from: query.from ? new Date(query.from) : undefined,
   to: query.to ? new Date(`${query.to}T23:59:59.999`) : undefined,
   customerId: query.customerId || undefined,
+  saleType: query.saleType as "CASH" | "BILL" | undefined,
 });
 
 export const reportController = {
@@ -68,6 +71,11 @@ export const reportController = {
 
   dateWiseSales: asyncHandler(async (req: Request, res: Response) => {
     const data = await reportService.dateWiseSalesReport(parseRange(req.query as Record<string, string>));
+    res.json({ success: true, data });
+  }),
+
+  profit: asyncHandler(async (req: Request, res: Response) => {
+    const data = await reportService.profitReport(parseRange(req.query as Record<string, string>));
     res.json({ success: true, data });
   }),
 

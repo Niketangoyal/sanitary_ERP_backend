@@ -24,7 +24,7 @@ async function main() {
   if (!existingSettings) {
     await prisma.settings.create({
       data: {
-        businessName: "Synergy Homeopathic Sanitary & Bathroom Fittings",
+        businessName: "Sanitary & Bathroom Fittings",
         address: "",
         gstNumber: "",
         phone: "",
@@ -32,7 +32,7 @@ async function main() {
         invoicePrefix: "INV",
         returnPrefix: "RET",
         paymentPrefix: "PAY",
-        invoiceFooter: "Thank you for your business. Goods once sold will not be taken back.",
+        invoiceFooter: "Thank you for your business.",
         theme: "light",
       },
     });

@@ -30,6 +30,21 @@ enum PaymentMode {
   UPI
   BANK_TRANSFER
   CHEQUE
+  OTHER
+}
+
+// Cash (Kacha) = no GST invoice, generally settled immediately.
+// Bill (Pakka) = GST invoice, may be paid immediately or on credit.
+// This is independent of how/whether it has been paid (see PaymentStatus).
+enum SaleType {
+  CASH
+  BILL
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+  PARTIAL
 }
 
 // Two parallel receivable accounts kept per customer, mirroring the
@@ -48,6 +63,43 @@ enum LedgerEntryType {
 }
 
 // ==========================================================
+// HR / PAYROLL ENUMS
+// ==========================================================
+
+enum SalaryType {
+  MONTHLY
+  DAILY
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  LEFT
+}
+
+// Distinct from the customer-facing PaymentStatus: payroll uses PENDING
+// (not UNPAID) to match how salary dues are normally described.
+enum SalaryPaymentStatus {
+  PAID
+  PENDING
+  PARTIAL
+}
+
+enum AdvanceStatus {
+  PENDING
+  PARTIALLY_ADJUSTED
+  FULLY_ADJUSTED
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  PAID
+  UNPAID
+  OTHER
+}
+
+// ==========================================================
 // AUTH
 // ==========================================================
 
@@ -61,7 +113,41 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sales Sale[]
+  sales                  Sale[]
+  processedReturns       Return[]
+  recordedLeaves         LeaveRecord[]
+  processedAdjustments   AdvanceAdjustment[]
+  recordedSalaryPayments SalaryPayment[]
+
+  updatedCustomers      Customer[]       @relation("CustomerUpdatedBy")
+  deletedCustomers      Customer[]       @relation("CustomerDeletedBy")
+  createdProducts       Product[]        @relation("ProductCreatedBy")
+  updatedProducts       Product[]        @relation("ProductUpdatedBy")
+  deletedProducts       Product[]        @relation("ProductDeletedBy")
+  createdSuppliers      Supplier[]       @relation("SupplierCreatedBy")
+  updatedSuppliers      Supplier[]       @relation("SupplierUpdatedBy")
+  deletedSuppliers      Supplier[]       @relation("SupplierDeletedBy")
+  createdStockBatches   StockBatch[]     @relation("StockBatchCreatedBy")
+  updatedStockBatches   StockBatch[]     @relation("StockBatchUpdatedBy")
+  deletedStockBatches   StockBatch[]     @relation("StockBatchDeletedBy")
+  updatedSales          Sale[]           @relation("SaleUpdatedBy")
+  deletedSales          Sale[]           @relation("SaleDeletedBy")
+  updatedReturns        Return[]         @relation("ReturnUpdatedBy")
+  deletedReturns        Return[]         @relation("ReturnDeletedBy")
+  createdPayments       Payment[]        @relation("PaymentCreatedBy")
+  updatedPayments       Payment[]        @relation("PaymentUpdatedBy")
+  deletedPayments       Payment[]        @relation("PaymentDeletedBy")
+  createdEmployees      Employee[]       @relation("EmployeeCreatedBy")
+  updatedEmployees      Employee[]       @relation("EmployeeUpdatedBy")
+  deletedEmployees      Employee[]       @relation("EmployeeDeletedBy")
+  updatedSalaryRecords  SalaryRecord[]   @relation("SalaryRecordUpdatedBy")
+  deletedSalaryRecords  SalaryRecord[]   @relation("SalaryRecordDeletedBy")
+  deletedSalaryPayments SalaryPayment[]  @relation("SalaryPaymentDeletedBy")
+  createdAdvances       AdvancePayment[] @relation("AdvancePaymentCreatedBy")
+  updatedAdvances       AdvancePayment[] @relation("AdvancePaymentUpdatedBy")
+  deletedAdvances       AdvancePayment[] @relation("AdvancePaymentDeletedBy")
+  updatedLeaves         LeaveRecord[]    @relation("LeaveRecordUpdatedBy")
+  deletedLeaves         LeaveRecord[]    @relation("LeaveRecordDeletedBy")
 
   @@map("users")
 }
@@ -71,23 +157,29 @@ model User {
 // ==========================================================
 
 model Customer {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   companyName        String
   contactPerson      String?
   mobile             String
   address            String?
   gstNumber          String?
-  openingCashBalance Decimal  @default(0) @db.Decimal(14, 2)
-  openingBillBalance Decimal  @default(0) @db.Decimal(14, 2)
+  openingCashBalance Decimal   @default(0) @db.Decimal(14, 2)
+  openingBillBalance Decimal   @default(0) @db.Decimal(14, 2)
   notes              String?
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  updatedById        String?
+  deletedAt          DateTime?
+  deletedById        String?
+  deletionReason     String?
 
   sales         Sale[]
   returns       Return[]
   payments      Payment[]
   ledgerEntries LedgerEntry[]
+  updatedBy     User?         @relation("CustomerUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy     User?         @relation("CustomerDeletedBy", fields: [deletedById], references: [id])
 
   @@index([companyName])
   @@index([mobile])
@@ -99,21 +191,32 @@ model Customer {
 // ==========================================================
 
 model Product {
-  id            String        @id @default(cuid())
-  itemName      String
-  brand         String?
-  category      String?
-  specification String?
-  unit          String        @default("PCS")
-  purchasePrice Decimal       @default(0) @db.Decimal(12, 2)
-  sellingPrice  Decimal       @db.Decimal(12, 2)
-  gstPercent    Decimal       @default(0) @db.Decimal(5, 2)
-  status        ProductStatus @default(ACTIVE)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id             String        @id @default(cuid())
+  itemName       String
+  brand          String?
+  category       String?
+  specification  String?
+  unit           String        @default("PCS")
+  // Reference/default cost shown when logging a new purchase. NOT the
+  // costing source of truth once stock batches exist — see StockBatch.
+  purchasePrice  Decimal       @default(0) @db.Decimal(12, 2)
+  sellingPrice   Decimal       @db.Decimal(12, 2)
+  gstPercent     Decimal       @default(0) @db.Decimal(5, 2)
+  status         ProductStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  createdById    String?
+  updatedById    String?
+  deletedAt      DateTime?
+  deletedById    String?
+  deletionReason String?
 
-  saleItems   SaleItem[]
-  returnItems ReturnItem[]
+  saleItems    SaleItem[]
+  returnItems  ReturnItem[]
+  stockBatches StockBatch[]
+  createdBy    User?        @relation("ProductCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?        @relation("ProductUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy    User?        @relation("ProductDeletedBy", fields: [deletedById], references: [id])
 
   @@index([itemName])
   @@index([category])
@@ -122,15 +225,109 @@ model Product {
 }
 
 // ==========================================================
+// SUPPLIERS
+// ==========================================================
+
+model Supplier {
+  id             String    @id @default(cuid())
+  name           String
+  contactPerson  String?
+  mobile         String?
+  address        String?
+  gstNumber      String?
+  notes          String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdById    String?
+  updatedById    String?
+  deletedAt      DateTime?
+  deletedById    String?
+  deletionReason String?
+
+  stockBatches StockBatch[]
+  createdBy    User?        @relation("SupplierCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?        @relation("SupplierUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy    User?        @relation("SupplierDeletedBy", fields: [deletedById], references: [id])
+
+  @@index([name])
+  @@map("suppliers")
+}
+
+// ==========================================================
+// PURCHASES / STOCK BATCHES — FIFO inventory costing
+// ==========================================================
+
+// Every purchase (goods received) creates one batch at whatever price was
+// paid for it. Batches are never overwritten — the same product can have
+// many batches at different prices, and sales draw down quantityRemaining
+// oldest-batch-first (FIFO) so COGS reflects actual purchase cost.
+model StockBatch {
+  id                String    @id @default(cuid())
+  productId         String
+  purchasePrice     Decimal   @db.Decimal(12, 2)
+  quantity          Decimal   @db.Decimal(12, 2)
+  quantityRemaining Decimal   @db.Decimal(12, 2)
+  purchaseDate      DateTime
+  // Legacy free-text supplier name, kept for batches recorded before the
+  // Supplier master existed. New purchases should set supplierId instead;
+  // this is denormalized from it for display/back-compat.
+  supplier          String?
+  supplierId        String?
+  // Set only for batches created by restocking a Return — lets a Return
+  // edit/delete locate and reverse exactly the batch it created, guarded
+  // by the same "not yet resold" check as any other stock reversal.
+  returnId          String?
+  createdAt         DateTime  @default(now())
+  createdById       String?
+  updatedAt         DateTime  @updatedAt
+  updatedById       String?
+  deletedAt         DateTime?
+  deletedById       String?
+  deletionReason    String?
+
+  product      Product            @relation(fields: [productId], references: [id])
+  supplierRef  Supplier?          @relation(fields: [supplierId], references: [id])
+  return       Return?            @relation(fields: [returnId], references: [id])
+  consumptions BatchConsumption[]
+  createdBy    User?              @relation("StockBatchCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?              @relation("StockBatchUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy    User?              @relation("StockBatchDeletedBy", fields: [deletedById], references: [id])
+
+  @@index([productId, purchaseDate])
+  @@index([supplierId])
+  @@index([returnId])
+  @@map("stock_batches")
+}
+
+// Audit trail of exactly which batch(es) a sale line drew stock from, and
+// at what unit cost — lets profit reports recompute COGS without ambiguity
+// even if a product's batches are later fully consumed.
+model BatchConsumption {
+  id         String  @id @default(cuid())
+  saleItemId String
+  batchId    String
+  quantity   Decimal @db.Decimal(12, 2)
+  unitCost   Decimal @db.Decimal(12, 2)
+
+  saleItem SaleItem   @relation(fields: [saleItemId], references: [id], onDelete: Cascade)
+  batch    StockBatch @relation(fields: [batchId], references: [id])
+
+  @@index([saleItemId])
+  @@index([batchId])
+  @@map("batch_consumptions")
+}
+
+// ==========================================================
 // INVOICE / DOCUMENT NUMBER COUNTERS
 // ==========================================================
 
 model InvoiceCounter {
-  id            String  @id @default(cuid())
+  id            String @id @default(cuid())
   key           String // "SALE" | "RETURN" | "PAYMENT"
   financialYear String // e.g. "2025-26"
   prefix        String
-  currentNumber Int     @default(0)
+  currentNumber Int    @default(0)
 
   updatedAt DateTime @updatedAt
 
@@ -143,27 +340,40 @@ model InvoiceCounter {
 // ==========================================================
 
 model Sale {
-  id            String   @id @default(cuid())
-  invoiceNumber String   @unique
-  invoiceDate   DateTime
-  customerId    String
-  subtotal      Decimal  @db.Decimal(14, 2)
-  discountTotal Decimal  @default(0) @db.Decimal(14, 2)
-  gstTotal      Decimal  @default(0) @db.Decimal(14, 2)
-  grandTotal    Decimal  @db.Decimal(14, 2)
-  notes         String?
-  createdById   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String        @id @default(cuid())
+  invoiceNumber  String        @unique
+  invoiceDate    DateTime
+  customerId     String
+  saleType       SaleType
+  subtotal       Decimal       @db.Decimal(14, 2)
+  discountTotal  Decimal       @default(0) @db.Decimal(14, 2)
+  gstTotal       Decimal       @default(0) @db.Decimal(14, 2)
+  grandTotal     Decimal       @db.Decimal(14, 2)
+  paymentStatus  PaymentStatus @default(UNPAID)
+  paymentMethod  PaymentMode?
+  amountPaid     Decimal       @default(0) @db.Decimal(14, 2)
+  balanceDue     Decimal       @db.Decimal(14, 2)
+  notes          String?
+  createdById    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  updatedById    String?
+  deletedAt      DateTime?
+  deletedById    String?
+  deletionReason String?
 
   customer      Customer      @relation(fields: [customerId], references: [id])
   createdBy     User?         @relation(fields: [createdById], references: [id])
+  updatedBy     User?         @relation("SaleUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy     User?         @relation("SaleDeletedBy", fields: [deletedById], references: [id])
   items         SaleItem[]
   returns       Return[]
+  payments      Payment[]
   ledgerEntries LedgerEntry[]
 
   @@index([customerId])
   @@index([invoiceDate])
+  @@index([paymentStatus])
   @@map("sales")
 }
 
@@ -179,9 +389,13 @@ model SaleItem {
   gstPercent      Decimal @default(0) @db.Decimal(5, 2)
   gstAmount       Decimal @default(0) @db.Decimal(12, 2)
   total           Decimal @db.Decimal(14, 2)
+  // FIFO-computed cost basis at time of sale (sum of batch unitCost * qty
+  // drawn) — immutable historical record for profit reporting.
+  costOfGoods     Decimal @default(0) @db.Decimal(14, 2)
 
-  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  sale         Sale               @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product      Product            @relation(fields: [productId], references: [id])
+  consumptions BatchConsumption[]
 
   @@index([saleId])
   @@index([productId])
@@ -193,25 +407,38 @@ model SaleItem {
 // ==========================================================
 
 model Return {
-  id           String   @id @default(cuid())
-  returnNumber String   @unique
-  returnDate   DateTime
-  customerId   String
-  saleId       String?
-  reason       String?
-  subtotal     Decimal  @db.Decimal(14, 2)
-  gstTotal     Decimal  @default(0) @db.Decimal(14, 2)
-  grandTotal   Decimal  @db.Decimal(14, 2)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String    @id @default(cuid())
+  returnNumber   String    @unique
+  returnDate     DateTime
+  customerId     String
+  // Nullable at the DB level for pre-existing rows, but required by the API
+  // validator going forward — every return must trace back to the invoice
+  // it's against so quantities can be capped against what was actually sold.
+  saleId         String?
+  reason         String?
+  subtotal       Decimal   @db.Decimal(14, 2)
+  gstTotal       Decimal   @default(0) @db.Decimal(14, 2)
+  grandTotal     Decimal   @db.Decimal(14, 2)
+  processedById  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  updatedById    String?
+  deletedAt      DateTime?
+  deletedById    String?
+  deletionReason String?
 
   customer      Customer      @relation(fields: [customerId], references: [id])
   sale          Sale?         @relation(fields: [saleId], references: [id])
+  processedBy   User?         @relation(fields: [processedById], references: [id])
+  updatedBy     User?         @relation("ReturnUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy     User?         @relation("ReturnDeletedBy", fields: [deletedById], references: [id])
   items         ReturnItem[]
   ledgerEntries LedgerEntry[]
+  stockBatches  StockBatch[]
 
   @@index([customerId])
   @@index([returnDate])
+  @@index([saleId])
   @@map("returns")
 }
 
@@ -239,22 +466,37 @@ model ReturnItem {
 // ==========================================================
 
 model Payment {
-  id            String            @id @default(cuid())
-  paymentNumber String            @unique
-  customerId    String
-  date          DateTime
-  amount        Decimal           @db.Decimal(14, 2)
-  mode          PaymentMode
-  accountType   LedgerAccountType
-  remarks       String?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id             String            @id @default(cuid())
+  paymentNumber  String            @unique
+  customerId     String
+  // When set, this payment is earmarked against a specific invoice (its
+  // accountType is inferred from that sale's saleType, not chosen freely).
+  // When null, it's a general payment against the customer's Cash/Bill
+  // account not tied to one invoice.
+  saleId         String?
+  date           DateTime
+  amount         Decimal           @db.Decimal(14, 2)
+  mode           PaymentMode
+  accountType    LedgerAccountType
+  remarks        String?
+  createdById    String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  updatedById    String?
+  deletedAt      DateTime?
+  deletedById    String?
+  deletionReason String?
 
   customer      Customer      @relation(fields: [customerId], references: [id])
+  sale          Sale?         @relation(fields: [saleId], references: [id])
+  createdBy     User?         @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+  updatedBy     User?         @relation("PaymentUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy     User?         @relation("PaymentDeletedBy", fields: [deletedById], references: [id])
   ledgerEntries LedgerEntry[]
 
   @@index([customerId])
   @@index([date])
+  @@index([saleId])
   @@map("payments")
 }
 
@@ -263,12 +505,12 @@ model Payment {
 // ==========================================================
 
 model LedgerEntry {
-  id         String  @id @default(cuid())
+  id         String @id @default(cuid())
   customerId String
   // Monotonic tiebreaker guaranteeing stable chronological ordering
   // (independent of same-millisecond createdAt collisions) so running
   // balances always replay in the exact order they were posted.
-  sequence   Int     @default(autoincrement())
+  sequence   Int    @default(autoincrement())
 
   entryDate       DateTime
   type            LedgerEntryType
@@ -320,4 +562,213 @@ model Settings {
   updatedAt     DateTime @updatedAt
 
   @@map("settings")
+}
+
+// ==========================================================
+// EMPLOYEES / PAYROLL
+// ==========================================================
+
+model Employee {
+  id               String           @id @default(cuid())
+  employeeCode     String           @unique
+  fullName         String
+  mobile           String
+  address          String?
+  email            String?
+  dateOfJoining    DateTime
+  department       String?
+  designation      String?
+  salaryType       SalaryType       @default(MONTHLY)
+  // Cached "as of now" salary for quick display — the authoritative,
+  // period-accurate figure for payroll always comes from SalaryIncrement
+  // (see salaryIncrement.service effectiveSalaryOn).
+  currentSalary    Decimal          @db.Decimal(12, 2)
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  createdById      String?
+  updatedById      String?
+  deletedAt        DateTime?
+  deletedById      String?
+  deletionReason   String?
+
+  increments         SalaryIncrement[]
+  salaryRecords      SalaryRecord[]
+  advances           AdvancePayment[]
+  leaves             LeaveRecord[]
+  advanceAdjustments AdvanceAdjustment[]
+  createdBy          User?               @relation("EmployeeCreatedBy", fields: [createdById], references: [id])
+  updatedBy          User?               @relation("EmployeeUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy          User?               @relation("EmployeeDeletedBy", fields: [deletedById], references: [id])
+
+  @@index([fullName])
+  @@index([employmentStatus])
+  @@map("employees")
+}
+
+// Full increment trail, including an implicit "Initial Salary" row created
+// alongside the employee — old rows are never edited, so historical payroll
+// can always be recomputed against what was true at the time.
+model SalaryIncrement {
+  id             String   @id @default(cuid())
+  employeeId     String
+  previousSalary Decimal  @db.Decimal(12, 2)
+  newSalary      Decimal  @db.Decimal(12, 2)
+  effectiveDate  DateTime
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, effectiveDate])
+  @@map("salary_increments")
+}
+
+// One row per employee per month — generation is a one-time, immutable
+// action (like a Sale invoice); corrections happen via a fresh increment or
+// manual adjustment note, never by overwriting a generated period.
+model SalaryRecord {
+  id               String              @id @default(cuid())
+  salaryNumber     String              @unique
+  employeeId       String
+  month            Int
+  year             Int
+  baseSalary       Decimal             @db.Decimal(12, 2)
+  paidLeaveDays    Decimal             @default(0) @db.Decimal(5, 2)
+  unpaidLeaveDays  Decimal             @default(0) @db.Decimal(5, 2)
+  leaveDeduction   Decimal             @default(0) @db.Decimal(12, 2)
+  advanceDeduction Decimal             @default(0) @db.Decimal(12, 2)
+  grossSalary      Decimal             @db.Decimal(12, 2)
+  netPay           Decimal             @db.Decimal(12, 2)
+  amountPaid       Decimal             @default(0) @db.Decimal(12, 2)
+  balanceDue       Decimal             @db.Decimal(12, 2)
+  paymentStatus    SalaryPaymentStatus @default(PENDING)
+  paymentDate      DateTime?
+  paymentMethod    PaymentMode?
+  notes            String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  updatedById      String?
+  deletedAt        DateTime?
+  deletedById      String?
+  deletionReason   String?
+
+  employee    Employee            @relation(fields: [employeeId], references: [id])
+  payments    SalaryPayment[]
+  adjustments AdvanceAdjustment[]
+  updatedBy   User?               @relation("SalaryRecordUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy   User?               @relation("SalaryRecordDeletedBy", fields: [deletedById], references: [id])
+
+  @@unique([employeeId, month, year])
+  @@index([employeeId])
+  @@map("salary_records")
+}
+
+// Payment history against a SalaryRecord — supports partial payments the
+// same way customer Payments support partial invoice settlement.
+model SalaryPayment {
+  id             String      @id @default(cuid())
+  salaryRecordId String
+  amount         Decimal     @db.Decimal(12, 2)
+  paymentDate    DateTime
+  paymentMethod  PaymentMode
+  remarks        String?
+  recordedById   String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+  deletedById    String?
+  deletionReason String?
+
+  salaryRecord SalaryRecord @relation(fields: [salaryRecordId], references: [id])
+  recordedBy   User         @relation(fields: [recordedById], references: [id])
+  deletedBy    User?        @relation("SalaryPaymentDeletedBy", fields: [deletedById], references: [id])
+
+  @@index([salaryRecordId])
+  @@map("salary_payments")
+}
+
+// Salary advances. Deduction is admin-chosen per salary run (not
+// automatic) — see AdvanceAdjustment for the resulting history. Status
+// tracks adjustedAmount vs amount: 0 = PENDING, partial = PARTIALLY_ADJUSTED,
+// full = FULLY_ADJUSTED.
+model AdvancePayment {
+  id             String        @id @default(cuid())
+  advanceNumber  String        @unique
+  employeeId     String
+  date           DateTime
+  amount         Decimal       @db.Decimal(12, 2)
+  reason         String?
+  adjustedAmount Decimal       @default(0) @db.Decimal(12, 2)
+  status         AdvanceStatus @default(PENDING)
+  createdById    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  updatedById    String?
+  deletedAt      DateTime?
+  deletedById    String?
+  deletionReason String?
+
+  employee    Employee            @relation(fields: [employeeId], references: [id])
+  adjustments AdvanceAdjustment[]
+  createdBy   User?               @relation("AdvancePaymentCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User?               @relation("AdvancePaymentUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy   User?               @relation("AdvancePaymentDeletedBy", fields: [deletedById], references: [id])
+
+  @@index([employeeId, status])
+  @@map("advance_payments")
+}
+
+// One row per (advance, salary run) adjustment event — the audit trail an
+// admin sees as "Advance Adjustment History". Salary Month/Year is read via
+// the salaryRecord relation rather than duplicated here.
+model AdvanceAdjustment {
+  id                    String   @id @default(cuid())
+  advanceId             String
+  salaryRecordId        String
+  employeeId            String
+  amount                Decimal  @db.Decimal(12, 2)
+  remainingBalanceAfter Decimal  @db.Decimal(12, 2)
+  adjustmentDate        DateTime @default(now())
+  processedById         String
+  createdAt             DateTime @default(now())
+
+  advance      AdvancePayment @relation(fields: [advanceId], references: [id])
+  salaryRecord SalaryRecord   @relation(fields: [salaryRecordId], references: [id])
+  employee     Employee       @relation(fields: [employeeId], references: [id])
+  processedBy  User           @relation(fields: [processedById], references: [id])
+
+  @@index([employeeId])
+  @@index([advanceId])
+  @@index([salaryRecordId])
+  @@map("advance_adjustments")
+}
+
+// Admin-recorded leave — employees have no ERP access, so every row is
+// entered by whoever is logged in (recordedBy).
+model LeaveRecord {
+  id             String    @id @default(cuid())
+  employeeId     String
+  leaveType      LeaveType
+  fromDate       DateTime
+  toDate         DateTime
+  totalDays      Decimal   @db.Decimal(5, 2)
+  reason         String?
+  recordedById   String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  updatedById    String?
+  deletedAt      DateTime?
+  deletedById    String?
+  deletionReason String?
+
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  recordedBy User     @relation(fields: [recordedById], references: [id])
+  updatedBy  User?    @relation("LeaveRecordUpdatedBy", fields: [updatedById], references: [id])
+  deletedBy  User?    @relation("LeaveRecordDeletedBy", fields: [deletedById], references: [id])
+
+  @@index([employeeId])
+  @@index([fromDate])
+  @@map("leave_records")
 }

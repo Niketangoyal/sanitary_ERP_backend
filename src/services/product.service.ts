@@ -55,7 +55,7 @@ export const productService = {
     return product;
   },
 
-  async create(input: CreateProductInput) {
+  async create(input: CreateProductInput, createdById?: string) {
     return productRepository.create({
       itemName: input.itemName,
       brand: input.brand ?? null,
@@ -66,28 +66,31 @@ export const productService = {
       sellingPrice: input.sellingPrice,
       gstPercent: input.gstPercent,
       status: input.status,
+      ...(createdById ? { createdBy: { connect: { id: createdById } } } : {}),
     });
   },
 
-  async update(id: string, input: UpdateProductInput) {
+  async update(id: string, input: UpdateProductInput, updatedById?: string) {
     const existing = await productRepository.findById(id);
     if (!existing) throw AppError.notFound("Product not found");
-    return productRepository.update(id, input);
+    return productRepository.update(id, {
+      ...input,
+      ...(updatedById ? { updatedBy: { connect: { id: updatedById } } } : {}),
+    });
   },
 
-  async remove(id: string) {
+  /** Soft delete only — blocked outright (no override) if the product has any purchase/sale/return history. */
+  async remove(id: string, deletedById: string, reason?: string) {
     const existing = await productRepository.findById(id);
     if (!existing) throw AppError.notFound("Product not found");
+    if (existing.deletedAt) throw AppError.badRequest("This product has already been deleted");
 
-    try {
-      await productRepository.remove(id);
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
-        throw AppError.conflict(
-          "This product has sales or return history and cannot be deleted. Mark it inactive instead.",
-        );
-      }
-      throw err;
+    if (await productRepository.hasTransactions(id)) {
+      throw AppError.conflict(
+        "This product has purchase, sale, or return history and cannot be deleted. Mark it inactive instead.",
+      );
     }
+
+    await productRepository.softDelete(id, deletedById, reason);
   },
 };

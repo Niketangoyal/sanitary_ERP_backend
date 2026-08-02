@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { paymentService } from "../services/payment.service";
+import { AppError } from "../utils/AppError";
 
 export const paymentController = {
   list: asyncHandler(async (req: Request, res: Response) => {
@@ -21,5 +22,16 @@ export const paymentController = {
   create: asyncHandler(async (req: Request, res: Response) => {
     const data = await paymentService.create(req.body);
     res.status(201).json({ success: true, data });
+  }),
+
+  update: asyncHandler(async (req: Request, res: Response) => {
+    const data = await paymentService.update(req.params.id, req.body, req.user?.userId);
+    res.json({ success: true, data });
+  }),
+
+  remove: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) throw AppError.unauthorized();
+    await paymentService.remove(req.params.id, req.user.userId, req.body?.reason);
+    res.json({ success: true, message: "Payment deleted" });
   }),
 };

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { productService } from "../services/product.service";
+import { AppError } from "../utils/AppError";
 
 export const productController = {
   list: asyncHandler(async (req: Request, res: Response) => {
@@ -24,17 +25,18 @@ export const productController = {
   }),
 
   create: asyncHandler(async (req: Request, res: Response) => {
-    const data = await productService.create(req.body);
+    const data = await productService.create(req.body, req.user?.userId);
     res.status(201).json({ success: true, data });
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const data = await productService.update(req.params.id, req.body);
+    const data = await productService.update(req.params.id, req.body, req.user?.userId);
     res.json({ success: true, data });
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await productService.remove(req.params.id);
+    if (!req.user) throw AppError.unauthorized();
+    await productService.remove(req.params.id, req.user.userId, req.body?.reason);
     res.json({ success: true, message: "Product deleted" });
   }),
 };

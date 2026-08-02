@@ -84,6 +84,54 @@ export const ledgerService = {
     });
   },
 
+  /**
+   * Replays a customer's full ledger in `sequence` order and rewrites
+   * cashBalanceAfter/billBalanceAfter on every row. Must be called after
+   * anything mutates a past entry's debit/credit or removes a row —
+   * editing/deleting a Sale, Return, or Payment always ends with this so
+   * every later entry's running balance stays correct.
+   */
+  async recomputeCustomerBalances(tx: Prisma.TransactionClient, customerId: string) {
+    const entries = await tx.ledgerEntry.findMany({
+      where: { customerId },
+      orderBy: { sequence: "asc" },
+    });
+
+    let cash = toDecimal(0);
+    let bill = toDecimal(0);
+
+    for (const entry of entries) {
+      const delta = toDecimal(entry.debit).sub(toDecimal(entry.credit));
+      if (entry.accountType === "CASH") cash = round2(cash.add(delta));
+      else bill = round2(bill.add(delta));
+
+      if (!toDecimal(entry.cashBalanceAfter).equals(cash) || !toDecimal(entry.billBalanceAfter).equals(bill)) {
+        await tx.ledgerEntry.update({
+          where: { id: entry.id },
+          data: { cashBalanceAfter: cash, billBalanceAfter: bill },
+        });
+      }
+    }
+  },
+
+  /**
+   * Deletes every ledger entry tied to a given sale/return/payment and
+   * recomputes running balances for the affected customer. Used to reverse
+   * a document's ledger effect before re-posting new values (edit) or
+   * permanently (delete).
+   */
+  async reverseEntriesFor(
+    tx: Prisma.TransactionClient,
+    where: { saleId: string } | { returnId: string } | { paymentId: string },
+  ) {
+    const entries = await tx.ledgerEntry.findMany({ where });
+    if (entries.length === 0) return;
+
+    const customerId = entries[0].customerId;
+    await tx.ledgerEntry.deleteMany({ where });
+    await ledgerService.recomputeCustomerBalances(tx, customerId);
+  },
+
   /** Full statement for a customer, optionally scoped to a date range, for the Ledger page/PDF/reports. */
   async getStatement(customerId: string, range: { from?: Date; to?: Date }) {
     const customer = await customerRepository.findById(customerId);

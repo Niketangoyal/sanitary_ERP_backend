@@ -22,6 +22,11 @@ export const updateCustomerSchema = createCustomerSchema
     isActive: z.boolean().optional(),
   });
 
+export const deleteCustomerSchema = z.object({
+  force: z.boolean().optional(),
+  reason: z.string().max(500).optional(),
+});
+
 export const listCustomerQuerySchema = z.object({
   page: z.string().optional(),
   limit: z.string().optional(),

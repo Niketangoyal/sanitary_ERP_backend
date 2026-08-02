@@ -4,22 +4,33 @@ import { prisma } from "../config/prisma";
 const saleWithRelations = {
   customer: true,
   items: { include: { product: true } },
+  payments: { orderBy: { date: "asc" } },
 } satisfies Prisma.SaleInclude;
 
 export const saleRepository = {
   create: (tx: Prisma.TransactionClient, data: Prisma.SaleCreateInput) =>
     tx.sale.create({ data, include: saleWithRelations }),
 
-  findMany: (args: Prisma.SaleFindManyArgs) =>
-    prisma.sale.findMany({ ...args, include: { customer: true } }),
+  update: (tx: Prisma.TransactionClient, id: string, data: Prisma.SaleUpdateInput) =>
+    tx.sale.update({ where: { id }, data, include: saleWithRelations }),
 
-  count: (where: Prisma.SaleWhereInput) => prisma.sale.count({ where }),
+  softDelete: (tx: Prisma.TransactionClient, id: string, deletedById: string, deletionReason?: string | null) =>
+    tx.sale.update({
+      where: { id },
+      data: { deletedAt: new Date(), deletedById, deletionReason: deletionReason ?? null },
+    }),
+
+  findMany: (args: Prisma.SaleFindManyArgs) =>
+    prisma.sale.findMany({ ...args, where: { ...args.where, deletedAt: null }, include: { customer: true } }),
+
+  count: (where: Prisma.SaleWhereInput) => prisma.sale.count({ where: { ...where, deletedAt: null } }),
 
   findById: (id: string) =>
     prisma.sale.findUnique({ where: { id }, include: saleWithRelations }),
 
   recent: (limit = 5) =>
     prisma.sale.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: limit,
       include: { customer: true },

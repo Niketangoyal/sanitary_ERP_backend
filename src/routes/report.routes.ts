@@ -13,4 +13,5 @@ reportRoutes.get("/payments", reportController.payments);
 reportRoutes.get("/item-wise-sales", reportController.itemWiseSales);
 reportRoutes.get("/monthly-sales", reportController.monthlySales);
 reportRoutes.get("/date-wise-sales", reportController.dateWiseSales);
+reportRoutes.get("/profit", reportController.profit);
 reportRoutes.get("/:reportKey/pdf", reportController.downloadPdf);

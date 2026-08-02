@@ -63,7 +63,8 @@ export type ReportKey =
   | "payments"
   | "item-wise-sales"
   | "monthly-sales"
-  | "date-wise-sales";
+  | "date-wise-sales"
+  | "profit";
 
 export const buildReportPdfDefinition = async (
   reportKey: ReportKey,
@@ -324,6 +325,27 @@ export const buildReportPdfDefinition = async (
           layout: baseTableLayout,
         },
         summaryBlock([["Grand Total", formatMoneyPdf(grandTotal)]]),
+      );
+    }
+
+    case "profit": {
+      const p = await reportService.profitReport(range);
+      return buildBase(
+        settings,
+        "PROFIT REPORT",
+        rangeLabel,
+        summaryBlock([
+          ["Total Sales", formatMoneyPdf(p.totalSales)],
+          ["Total Purchase Cost (COGS)", formatMoneyPdf(p.totalCOGS)],
+          ["Cash (Kacha) Sales", formatMoneyPdf(p.cashSales)],
+          ["Bill (Pakka) Sales", formatMoneyPdf(p.billSales)],
+          ["Total Invoices", String(p.totalInvoices)],
+          ["Total Products Sold", String(p.totalProductsSold)],
+          ["Paid Amount", formatMoneyPdf(p.paidAmount)],
+          ["Outstanding Amount", formatMoneyPdf(p.outstandingAmount)],
+          ["Profit %", `${p.profitPercent}%`],
+          ["Gross Profit", formatMoneyPdf(p.grossProfit)],
+        ]),
       );
     }
 

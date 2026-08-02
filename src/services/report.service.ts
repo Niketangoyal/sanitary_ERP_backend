@@ -11,6 +11,7 @@ export interface DateRange {
   from?: Date;
   to?: Date;
   customerId?: string;
+  saleType?: "CASH" | "BILL";
 }
 
 export const reportService = {
@@ -50,6 +51,7 @@ export const reportService = {
     const sales = await saleRepository.findMany({
       where: {
         ...(range.customerId ? { customerId: range.customerId } : {}),
+        ...(range.saleType ? { saleType: range.saleType } : {}),
         invoiceDate: { gte: range.from, lte: range.to },
       },
       orderBy: { invoiceDate: "asc" },
@@ -202,6 +204,44 @@ export const reportService = {
       total: data.total,
       count: data.count,
     }));
+  },
+
+  /** Profit = Sales − COGS, where COGS is the FIFO cost recorded on each sale item at sale time. */
+  async profitReport(range: DateRange) {
+    const [sales, itemAgg] = await Promise.all([
+      saleRepository.findMany({
+        where: { invoiceDate: { gte: range.from, lte: range.to } },
+      }),
+      prisma.saleItem.aggregate({
+        where: { sale: { invoiceDate: { gte: range.from, lte: range.to } } },
+        _sum: { costOfGoods: true, quantity: true },
+      }),
+    ]);
+
+    const totalSales = roundNum2(sales.reduce((sum, s) => sum + Number(s.grandTotal), 0));
+    const totalCOGS = roundNum2(Number(itemAgg._sum.costOfGoods ?? 0));
+    const grossProfit = roundNum2(totalSales - totalCOGS);
+    const cashSales = roundNum2(
+      sales.filter((s) => s.saleType === "CASH").reduce((sum, s) => sum + Number(s.grandTotal), 0),
+    );
+    const billSales = roundNum2(
+      sales.filter((s) => s.saleType === "BILL").reduce((sum, s) => sum + Number(s.grandTotal), 0),
+    );
+    const paidAmount = roundNum2(sales.reduce((sum, s) => sum + Number(s.amountPaid), 0));
+    const outstandingAmount = roundNum2(sales.reduce((sum, s) => sum + Number(s.balanceDue), 0));
+
+    return {
+      totalSales,
+      totalCOGS,
+      grossProfit,
+      profitPercent: totalSales > 0 ? roundNum2((grossProfit / totalSales) * 100) : 0,
+      totalInvoices: sales.length,
+      totalProductsSold: Number(itemAgg._sum.quantity ?? 0),
+      cashSales,
+      billSales,
+      paidAmount,
+      outstandingAmount,
+    };
   },
 
   async dateWiseSalesReport(range: DateRange) {

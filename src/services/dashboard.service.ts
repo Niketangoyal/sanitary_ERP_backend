@@ -5,6 +5,7 @@ import { returnRepository } from "../repositories/return.repository";
 import { paymentRepository } from "../repositories/payment.repository";
 import { reportService } from "./report.service";
 import { roundNum2 } from "../utils/money";
+import { resolvePeriodRange, PeriodPreset } from "../utils/dateRangePresets";
 
 const LEDGER_TYPE_LABEL: Record<string, string> = {
   OPENING: "Opening Balance",
@@ -35,6 +36,31 @@ export const dashboardService = {
       todaySales: roundNum2(todaySales),
       todayPayments: roundNum2(todayPayments),
       todayReturns: roundNum2(todayReturns),
+    };
+  },
+
+  /** Sales/payments/returns/cash-vs-bill split/profit for a selectable period (Today/Week/Month/Year/Custom). */
+  async periodSummary(period: PeriodPreset, customFrom?: string, customTo?: string) {
+    const { from, to } = resolvePeriodRange(period, customFrom, customTo);
+
+    const [sales, payments, returns, profit] = await Promise.all([
+      saleRepository.sumGrandTotalInRange(from, to),
+      paymentRepository.sumAmountInRange(from, to),
+      returnRepository.sumGrandTotalInRange(from, to),
+      reportService.profitReport({ from, to }),
+    ]);
+
+    return {
+      from: from.toISOString(),
+      to: to.toISOString(),
+      sales: roundNum2(sales),
+      payments: roundNum2(payments),
+      returns: roundNum2(returns),
+      cashSales: profit.cashSales,
+      billSales: profit.billSales,
+      grossProfit: profit.grossProfit,
+      profitPercent: profit.profitPercent,
+      totalInvoices: profit.totalInvoices,
     };
   },
 

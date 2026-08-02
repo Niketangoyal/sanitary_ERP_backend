@@ -2,7 +2,7 @@ import { Router } from "express";
 import { returnController } from "../controllers/return.controller";
 import { authenticate } from "../middleware/auth";
 import { validate } from "../middleware/validate";
-import { createReturnSchema } from "../utils/validators/return.schema";
+import { createReturnSchema, updateReturnSchema, deleteReturnSchema } from "../utils/validators/return.schema";
 import { idParamSchema } from "../utils/validators/customer.schema";
 
 export const returnRoutes = Router();
@@ -11,5 +11,16 @@ returnRoutes.use(authenticate);
 
 returnRoutes.get("/", returnController.list);
 returnRoutes.get("/recent", returnController.recent);
+returnRoutes.get("/eligible-items/:saleId", returnController.eligibleItems);
 returnRoutes.get("/:id", validate({ params: idParamSchema }), returnController.getById);
 returnRoutes.post("/", validate({ body: createReturnSchema }), returnController.create);
+returnRoutes.put(
+  "/:id",
+  validate({ params: idParamSchema, body: updateReturnSchema }),
+  returnController.update,
+);
+returnRoutes.delete(
+  "/:id",
+  validate({ params: idParamSchema, body: deleteReturnSchema }),
+  returnController.delete,
+);

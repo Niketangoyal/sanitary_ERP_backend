@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import dayjs from "dayjs";
 
-export type CounterKey = "SALE" | "RETURN" | "PAYMENT";
+export type CounterKey = "SALE" | "RETURN" | "PAYMENT" | "EMPLOYEE" | "SALARY" | "ADVANCE";
 
 /**
  * Indian financial year runs Apr 1 -> Mar 31. Counters reset per FY so
@@ -36,4 +36,22 @@ export const nextDocumentNumber = async (
 
   const padded = String(counter.currentNumber).padStart(4, "0");
   return `${prefix}/${financialYear}/${padded}`;
+};
+
+/**
+ * Employee codes are stable identifiers, not per-FY documents — this reuses
+ * the same counter table but with a constant "ALL" bucket so codes read
+ * EMP0001, EMP0002, ... and never reset.
+ */
+export const nextEmployeeCode = async (
+  tx: Prisma.TransactionClient,
+  prefix = "EMP",
+): Promise<string> => {
+  const counter = await tx.invoiceCounter.upsert({
+    where: { key_financialYear: { key: "EMPLOYEE", financialYear: "ALL" } },
+    create: { key: "EMPLOYEE", financialYear: "ALL", prefix, currentNumber: 1 },
+    update: { currentNumber: { increment: 1 } },
+  });
+
+  return `${prefix}${String(counter.currentNumber).padStart(4, "0")}`;
 };

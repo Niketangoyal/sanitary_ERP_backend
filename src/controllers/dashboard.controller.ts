@@ -1,10 +1,21 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { dashboardService } from "../services/dashboard.service";
+import { PeriodPreset } from "../utils/dateRangePresets";
 
 export const dashboardController = {
   summary: asyncHandler(async (_req: Request, res: Response) => {
     const data = await dashboardService.summary();
+    res.json({ success: true, data });
+  }),
+
+  periodSummary: asyncHandler(async (req: Request, res: Response) => {
+    const period = (req.query.period as PeriodPreset) || "today";
+    const data = await dashboardService.periodSummary(
+      period,
+      req.query.from as string | undefined,
+      req.query.to as string | undefined,
+    );
     res.json({ success: true, data });
   }),
 

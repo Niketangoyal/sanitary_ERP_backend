@@ -7,6 +7,7 @@ export const dashboardRoutes = Router();
 dashboardRoutes.use(authenticate);
 
 dashboardRoutes.get("/summary", dashboardController.summary);
+dashboardRoutes.get("/period-summary", dashboardController.periodSummary);
 dashboardRoutes.get("/monthly-sales", dashboardController.monthlySales);
 dashboardRoutes.get("/monthly-collections", dashboardController.monthlyCollections);
 dashboardRoutes.get("/recent-transactions", dashboardController.recentTransactions);
