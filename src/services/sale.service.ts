@@ -236,9 +236,7 @@ export const saleService = {
       }
 
       return sale;
-    },{
-    timeout: 15000,
-  });
+    }, { timeout: 30000 });
   },
 
   /**
@@ -358,7 +356,7 @@ export const saleService = {
       }
 
       return updated;
-    });
+    }, { timeout: 30000 });
   },
 
   /**
@@ -389,6 +387,6 @@ export const saleService = {
       await inventoryService.reverseConsumptionForSale(tx, id);
 
       return saleRepository.softDelete(tx, id, deletedById, reason);
-    });
+    }, { timeout: 30000 });
   },
 };

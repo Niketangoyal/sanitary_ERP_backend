@@ -266,7 +266,7 @@ export const returnService = {
       await recomputeSaleBalance(tx, originalSale.id);
 
       return returnDoc;
-    });
+    }, { timeout: 30000 });
   },
 
   /**
@@ -333,7 +333,7 @@ export const returnService = {
       await recomputeSaleBalance(tx, originalSale.id);
 
       return updated;
-    });
+    }, { timeout: 30000 });
   },
 
   /** Soft delete: reverses inventory + ledger effects, then marks the row deleted (kept for audit). */
@@ -348,6 +348,6 @@ export const returnService = {
       const deleted = await returnRepository.softDelete(tx, id, deletedById, reason);
       if (existing.saleId) await recomputeSaleBalance(tx, existing.saleId);
       return deleted;
-    });
+    }, { timeout: 30000 });
   },
 };

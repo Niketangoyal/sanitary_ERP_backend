@@ -136,7 +136,7 @@ export const salaryService = {
       }
 
       return record;
-    });
+    }, { timeout: 30000 });
   },
 
   async pay(salaryRecordId: string, input: PaySalaryInput, recordedById: string) {
@@ -176,7 +176,7 @@ export const salaryService = {
         paymentDate: input.paymentDate,
         paymentMethod: input.paymentMethod,
       });
-    });
+    }, { timeout: 15000 });
   },
 
   /**
@@ -227,7 +227,7 @@ export const salaryService = {
         notes: input.notes !== undefined ? input.notes : record.notes,
         updatedBy: { connect: { id: updatedById } },
       });
-    });
+    }, { timeout: 30000 });
   },
 
   /** Blocked outright if any payment has been recorded — remove installments first. */
@@ -244,7 +244,7 @@ export const salaryService = {
     return prisma.$transaction(async (tx) => {
       await advanceService.reverseAdjustmentsForSalaryRecord(tx, id);
       return salaryRepository.softDelete(tx, id, deletedById, reason);
-    });
+    }, { timeout: 30000 });
   },
 
   /** Recomputes the parent record's amountPaid/balanceDue/status after an installment's amount changes. */
@@ -284,7 +284,7 @@ export const salaryService = {
         balanceDue: newBalanceDue.lt(0) ? 0 : newBalanceDue,
         paymentStatus: newStatus,
       });
-    });
+    }, { timeout: 15000 });
   },
 
   /** Soft-deletes an installment and recomputes the parent record's totals/status. */
@@ -313,6 +313,6 @@ export const salaryService = {
         balanceDue: newBalanceDue.lt(0) ? 0 : newBalanceDue,
         paymentStatus: newStatus,
       });
-    });
+    }, { timeout: 15000 });
   },
 };
