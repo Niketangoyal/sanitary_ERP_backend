@@ -31,7 +31,7 @@ export const paymentRepository = {
 
   sumAmountInRange: async (from: Date, to: Date) => {
     const result = await prisma.payment.aggregate({
-      where: { date: { gte: from, lte: to } },
+      where: { date: { gte: from, lte: to }, deletedAt: null },
       _sum: { amount: true },
     });
     return Number(result._sum.amount ?? 0);

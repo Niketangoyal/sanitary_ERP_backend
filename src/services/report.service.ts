@@ -111,7 +111,7 @@ export const reportService = {
   async itemWiseSalesReport(range: DateRange) {
     const grouped = await prisma.saleItem.groupBy({
       by: ["productId"],
-      where: { sale: { invoiceDate: { gte: range.from, lte: range.to } } },
+      where: { sale: { invoiceDate: { gte: range.from, lte: range.to }, deletedAt: null } },
       _sum: { quantity: true, total: true, gstAmount: true },
     });
 
@@ -213,7 +213,7 @@ export const reportService = {
         where: { invoiceDate: { gte: range.from, lte: range.to } },
       }),
       prisma.saleItem.aggregate({
-        where: { sale: { invoiceDate: { gte: range.from, lte: range.to } } },
+        where: { sale: { invoiceDate: { gte: range.from, lte: range.to }, deletedAt: null } },
         _sum: { costOfGoods: true, quantity: true },
       }),
     ]);

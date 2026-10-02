@@ -162,7 +162,7 @@ export const inventoryService = {
 
   async totalRemainingStock(tx: Prisma.TransactionClient, productId: string): Promise<number> {
     const result = await tx.stockBatch.aggregate({
-      where: { productId },
+      where: { productId, deletedAt: null },
       _sum: { quantityRemaining: true },
     });
     return Number(result._sum.quantityRemaining ?? 0);

@@ -38,7 +38,7 @@ export const saleRepository = {
 
   sumGrandTotalInRange: async (from: Date, to: Date) => {
     const result = await prisma.sale.aggregate({
-      where: { invoiceDate: { gte: from, lte: to } },
+      where: { invoiceDate: { gte: from, lte: to }, deletedAt: null },
       _sum: { grandTotal: true },
     });
     return Number(result._sum.grandTotal ?? 0);

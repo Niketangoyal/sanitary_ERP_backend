@@ -13,6 +13,9 @@ export const leaveRepository = {
 
   findById: (id: string) => prisma.leaveRecord.findUnique({ where: { id } }),
 
+  count: (where: Prisma.LeaveRecordWhereInput) =>
+    prisma.leaveRecord.count({ where: { ...where, deletedAt: null } }),
+
   /** Leaves that overlap [periodStart, periodEnd] at all, for clipping into that window. */
   findOverlapping: (employeeId: string, periodStart: Date, periodEnd: Date) =>
     prisma.leaveRecord.findMany({

@@ -236,7 +236,9 @@ export const saleService = {
       }
 
       return sale;
-    });
+    },{
+    timeout: 15000,
+  });
   },
 
   /**
@@ -312,9 +314,8 @@ export const saleService = {
         },
       });
 
-      for (const item of updated.items) {
-        const plan = consumptionPlans.find((p) => p.productId === item.productId);
-        if (plan) await inventoryService.recordConsumption(tx, item.id, plan.plan);
+      for (let i = 0; i < updated.items.length; i++) {
+        await inventoryService.recordConsumption(tx, updated.items[i].id, consumptionPlans[i].plan);
       }
 
       await ledgerService.postEntry(tx, {

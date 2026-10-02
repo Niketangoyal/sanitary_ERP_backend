@@ -50,7 +50,7 @@ export const leaveService = {
         skip: pagination.skip,
         take: pagination.take,
       }),
-      leaveRepository.findMany({ where }).then((rows) => rows.length),
+      leaveRepository.count(where),
     ]);
 
     return buildPaginatedResult(data, total, pagination);
